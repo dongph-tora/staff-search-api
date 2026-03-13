@@ -1,0 +1,8 @@
+ALTER TABLE users RENAME CONSTRAINT uni_users_email TO users_email_key;
+ALTER TABLE users RENAME CONSTRAINT uni_users_google_id TO users_google_id_key;
+ALTER TABLE users RENAME CONSTRAINT uni_users_apple_id TO users_apple_id_key;
+ALTER TABLE refresh_tokens RENAME CONSTRAINT uni_refresh_tokens_token_hash TO refresh_tokens_token_hash_key;
+ALTER TABLE password_reset_tokens RENAME CONSTRAINT uni_password_reset_tokens_token_hash TO password_reset_tokens_token_hash_key;
+ALTER TABLE staff_profiles RENAME CONSTRAINT uni_staff_profiles_user_id TO staff_profiles_user_id_key;
+ALTER TABLE staff_profiles RENAME CONSTRAINT uni_staff_profiles_staff_number TO staff_profiles_staff_number_key;
+ALTER TABLE reviews RENAME CONSTRAINT uni_reviews_booking_id TO reviews_booking_id_key;

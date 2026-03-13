@@ -1,6 +1,9 @@
 package model
 
-import "time"
+import (
+	"errors"
+	"time"
+)
 
 type User struct {
 	ID                    string     `gorm:"primaryKey;type:varchar(26)" json:"id"`
@@ -34,3 +37,18 @@ type RefreshToken struct {
 	ExpiresAt time.Time `gorm:"not null;index" json:"expires_at"`
 	CreatedAt time.Time `gorm:"not null;autoCreateTime" json:"created_at"`
 }
+
+type PasswordResetToken struct {
+	ID        string     `gorm:"primaryKey;type:varchar(26)" json:"id"`
+	UserID    string     `gorm:"type:varchar(26);not null;index" json:"user_id"`
+	User      User       `gorm:"foreignKey:UserID;constraint:OnDelete:CASCADE" json:"-"`
+	TokenHash string     `gorm:"uniqueIndex;type:varchar(64);not null" json:"-"`
+	ExpiresAt time.Time  `gorm:"not null" json:"expires_at"`
+	UsedAt    *time.Time `json:"used_at,omitempty"`
+	CreatedAt time.Time  `gorm:"not null;autoCreateTime" json:"created_at"`
+}
+
+var (
+	ErrTokenExpired = errors.New("token expired")
+	ErrTokenUsed    = errors.New("token already used")
+)

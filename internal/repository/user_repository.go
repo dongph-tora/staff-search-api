@@ -86,6 +86,17 @@ func (r *UserRepository) AcceptPrivacyPolicy(ctx context.Context, userID, versio
 		}).Error
 }
 
+func (r *UserRepository) UpdatePasswordHash(ctx context.Context, userID, hash string) error {
+	return r.db.WithContext(ctx).Model(&model.User{}).Where("id = ?", userID).Update("password_hash", hash).Error
+}
+
+func (r *UserRepository) Update(ctx context.Context, userID string, fields map[string]any) error {
+	return r.db.WithContext(ctx).
+		Model(&model.User{}).
+		Where("id = ?", userID).
+		Updates(fields).Error
+}
+
 func (r *UserRepository) mapError(err error) error {
 	if errors.Is(err, gorm.ErrRecordNotFound) {
 		return model.ErrNotFound

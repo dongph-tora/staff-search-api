@@ -11,9 +11,9 @@ INSERT INTO users (
     privacy_policy_accepted, privacy_policy_version,
     created_at, updated_at
 ) VALUES (
-    'demo_user_00000000000000001',
+    'demo_user_0000000000000001',
     'demo@example.com',
-    '$2a$12$LJ3m4ys3Lk0TSwHCpN1Stu/bJqHGey7p3BPLmOaVCtSbxDMbq7Ly',
+    '$2a$12$Jy9j1BJRuwktBv9YCMmgRO/Tj7kOJ4i1JJvBjBMEZ.LiDxuGwpWdC',
     'Demo User',
     'user',
     FALSE, FALSE, TRUE,
@@ -29,13 +29,33 @@ INSERT INTO users (
     privacy_policy_accepted, privacy_policy_version,
     created_at, updated_at
 ) VALUES (
-    'demo_staff_0000000000000001',
+    'demo_staff_000000000000001',
     'staff-demo@example.com',
-    '$2a$12$LJ3m4ys3Lk0TSwHCpN1Stu/bJqHGey7p3BPLmOaVCtSbxDMbq7Ly',
+    '$2a$12$Jy9j1BJRuwktBv9YCMmgRO/Tj7kOJ4i1JJvBjBMEZ.LiDxuGwpWdC',
     'Demo Staff',
     'staff',
     TRUE, TRUE, TRUE,
     'email', 'active', 5000,
     TRUE, 'v1.0',
+    NOW(), NOW()
+) ON CONFLICT (id) DO NOTHING;
+
+INSERT INTO staff_profiles (
+    id, user_id, staff_number,
+    job_title, job_category,
+    location, bio,
+    is_available, accept_bookings,
+    rating, review_count, followers_count, total_tips_received,
+    created_at, updated_at
+) VALUES (
+    'demo_staff_prof_000000001',
+    'demo_staff_000000000000001',
+    '000001',
+    'ネイリスト',
+    'nail_art',
+    '東京都渋谷区',
+    'プロのネイリストです。お気軽にご予約ください。',
+    TRUE, TRUE,
+    4.8, 12, 34, 15000,
     NOW(), NOW()
 ) ON CONFLICT (id) DO NOTHING;

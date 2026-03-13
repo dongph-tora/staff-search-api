@@ -2,34 +2,49 @@ package service
 
 import (
 	"context"
+	"crypto/sha256"
 	"errors"
 	"fmt"
 	"time"
 
 	"golang.org/x/crypto/bcrypt"
+	"google.golang.org/api/idtoken"
 
 	"staff-search-api/internal/dto"
 	"staff-search-api/internal/model"
 	"staff-search-api/internal/repository"
+	"staff-search-api/pkg/email"
 	"staff-search-api/pkg/jwt"
 	"staff-search-api/pkg/ulid"
 )
 
 type AuthService struct {
-	userRepo         *repository.UserRepository
-	refreshTokenRepo *repository.RefreshTokenRepository
-	jwtService       *jwt.Service
+	userRepo          *repository.UserRepository
+	refreshTokenRepo  *repository.RefreshTokenRepository
+	jwtService        *jwt.Service
+	passwordResetRepo *repository.PasswordResetRepository
+	emailService      email.EmailSender
+	appBaseURL        string
+	googleClientID    string
 }
 
 func NewAuthService(
 	userRepo *repository.UserRepository,
 	refreshTokenRepo *repository.RefreshTokenRepository,
 	jwtService *jwt.Service,
+	passwordResetRepo *repository.PasswordResetRepository,
+	emailService email.EmailSender,
+	appBaseURL string,
+	googleClientID string,
 ) *AuthService {
 	return &AuthService{
-		userRepo:         userRepo,
-		refreshTokenRepo: refreshTokenRepo,
-		jwtService:       jwtService,
+		userRepo:          userRepo,
+		refreshTokenRepo:  refreshTokenRepo,
+		jwtService:        jwtService,
+		passwordResetRepo: passwordResetRepo,
+		emailService:      emailService,
+		appBaseURL:        appBaseURL,
+		googleClientID:    googleClientID,
 	}
 }
 
@@ -58,7 +73,7 @@ func (s *AuthService) Login(ctx context.Context, req *dto.LoginRequest) (*dto.Au
 		return nil, fmt.Errorf("update last login: %w", err)
 	}
 
-	return s.buildAuthResponse(ctx, user, false)
+	return s.BuildAuthResponse(ctx, user, false)
 }
 
 func (s *AuthService) Register(ctx context.Context, req *dto.RegisterRequest) (*dto.AuthResponse, error) {
@@ -99,7 +114,7 @@ func (s *AuthService) Register(ctx context.Context, req *dto.RegisterRequest) (*
 		return nil, fmt.Errorf("create user: %w", err)
 	}
 
-	return s.buildAuthResponse(ctx, user, true)
+	return s.BuildAuthResponse(ctx, user, true)
 }
 
 func (s *AuthService) RefreshToken(ctx context.Context, refreshTokenStr string) (*dto.AuthResponse, error) {
@@ -131,14 +146,102 @@ func (s *AuthService) RefreshToken(ctx context.Context, refreshTokenStr string) 
 		return nil, model.ErrAccountDisabled
 	}
 
-	return s.buildAuthResponse(ctx, user, false)
+	return s.BuildAuthResponse(ctx, user, false)
 }
 
 func (s *AuthService) Logout(ctx context.Context, userID string) error {
 	return s.refreshTokenRepo.DeleteByUserID(ctx, userID)
 }
 
-func (s *AuthService) buildAuthResponse(ctx context.Context, user *model.User, isNewUser bool) (*dto.AuthResponse, error) {
+func (s *AuthService) RequestPasswordReset(ctx context.Context, emailAddr string) error {
+	user, err := s.userRepo.FindByEmail(ctx, emailAddr)
+	if err != nil {
+		// Do not leak information about whether email exists
+		return nil
+	}
+
+	plaintextToken := ulid.New()
+	hash := sha256.Sum256([]byte(plaintextToken))
+	tokenHash := fmt.Sprintf("%x", hash)
+
+	now := time.Now()
+	token := &model.PasswordResetToken{
+		ID:        ulid.New(),
+		UserID:    user.ID,
+		TokenHash: tokenHash,
+		ExpiresAt: now.Add(1 * time.Hour),
+		CreatedAt: now,
+	}
+
+	if err := s.passwordResetRepo.Create(ctx, token); err != nil {
+		return fmt.Errorf("create password reset token: %w", err)
+	}
+
+	resetLink := s.appBaseURL + "/reset-password?token=" + plaintextToken
+	_ = s.emailService.SendPasswordReset(ctx, emailAddr, resetLink)
+
+	return nil
+}
+
+func (s *AuthService) ConfirmPasswordReset(ctx context.Context, plaintextToken, newPassword string) error {
+	hash := sha256.Sum256([]byte(plaintextToken))
+	tokenHash := fmt.Sprintf("%x", hash)
+
+	token, err := s.passwordResetRepo.FindByTokenHash(ctx, tokenHash)
+	if err != nil {
+		if errors.Is(err, model.ErrNotFound) {
+			return model.ErrInvalidToken
+		}
+		return fmt.Errorf("find reset token: %w", err)
+	}
+
+	if time.Now().After(token.ExpiresAt) {
+		return model.ErrTokenExpired
+	}
+
+	if token.UsedAt != nil {
+		return model.ErrTokenUsed
+	}
+
+	hashed, err := bcrypt.GenerateFromPassword([]byte(newPassword), 12)
+	if err != nil {
+		return fmt.Errorf("hash password: %w", err)
+	}
+	hashedStr := string(hashed)
+
+	if err := s.userRepo.UpdatePasswordHash(ctx, token.UserID, hashedStr); err != nil {
+		return fmt.Errorf("update password: %w", err)
+	}
+
+	return s.passwordResetRepo.MarkUsed(ctx, token.ID)
+}
+
+func (s *AuthService) ChangePassword(ctx context.Context, userID, currentPassword, newPassword string) error {
+	user, err := s.userRepo.FindByID(ctx, userID)
+	if err != nil {
+		if errors.Is(err, model.ErrNotFound) {
+			return model.ErrInvalidCredentials
+		}
+		return fmt.Errorf("find user: %w", err)
+	}
+
+	if user.PasswordHash == nil {
+		return model.ErrInvalidCredentials
+	}
+
+	if err := bcrypt.CompareHashAndPassword([]byte(*user.PasswordHash), []byte(currentPassword)); err != nil {
+		return model.ErrInvalidCredentials
+	}
+
+	hashed, err := bcrypt.GenerateFromPassword([]byte(newPassword), 12)
+	if err != nil {
+		return fmt.Errorf("hash password: %w", err)
+	}
+
+	return s.userRepo.UpdatePasswordHash(ctx, userID, string(hashed))
+}
+
+func (s *AuthService) BuildAuthResponse(ctx context.Context, user *model.User, isNewUser bool) (*dto.AuthResponse, error) {
 	pair, err := s.jwtService.GenerateTokenPair(user.ID, user.Email, user.Role)
 	if err != nil {
 		return nil, fmt.Errorf("generate token pair: %w", err)
@@ -166,6 +269,7 @@ func (s *AuthService) buildAuthResponse(ctx context.Context, user *model.User, i
 			ID:                    user.ID,
 			Email:                 user.Email,
 			Name:                  user.Name,
+			PhoneNumber:           user.PhoneNumber,
 			AvatarURL:             user.AvatarURL,
 			Role:                  user.Role,
 			IsStaff:               user.IsStaff,
@@ -175,5 +279,37 @@ func (s *AuthService) buildAuthResponse(ctx context.Context, user *model.User, i
 			PrivacyPolicyAccepted: user.PrivacyPolicyAccepted,
 			CreatedAt:             user.CreatedAt,
 		},
+	}, nil
+}
+
+type GoogleUserInfo struct {
+	GoogleID  string
+	Email     string
+	Name      string
+	AvatarURL string
+	Verified  bool
+}
+
+func (s *AuthService) VerifyGoogleToken(ctx context.Context, idToken string) (*GoogleUserInfo, error) {
+	payload, err := idtoken.Validate(ctx, idToken, s.googleClientID)
+	if err != nil {
+		return nil, model.ErrInvalidToken
+	}
+
+	sub, _ := payload.Claims["sub"].(string)
+	if sub == "" {
+		sub = payload.Subject
+	}
+	email, _ := payload.Claims["email"].(string)
+	name, _ := payload.Claims["name"].(string)
+	picture, _ := payload.Claims["picture"].(string)
+	verified, _ := payload.Claims["email_verified"].(bool)
+
+	return &GoogleUserInfo{
+		GoogleID:  sub,
+		Email:     email,
+		Name:      name,
+		AvatarURL: picture,
+		Verified:  verified,
 	}, nil
 }

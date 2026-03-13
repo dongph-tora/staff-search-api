@@ -6,8 +6,9 @@ import (
 )
 
 type Config struct {
-	AppEnv  string
-	AppPort string
+	AppEnv     string
+	AppPort    string
+	AppBaseURL string
 
 	DatabaseURL string
 	RedisURL    string
@@ -23,12 +24,22 @@ type Config struct {
 	SMTPUser string
 	SMTPPass string
 	SMTPFrom string
+
+	StorageProvider        string
+	StorageBucket          string
+	StorageRegion          string
+	StorageAccessKeyID     string
+	StorageSecretAccessKey string
+	StorageEndpoint        string
+	StoragePublicURL       string
+	StorageURLExpirySeconds int
 }
 
 func Load() *Config {
 	return &Config{
-		AppEnv:  getEnv("APP_ENV", "development"),
-		AppPort: getEnv("APP_PORT", "3000"),
+		AppEnv:     getEnv("APP_ENV", "development"),
+		AppPort:    getEnv("APP_PORT", "3000"),
+		AppBaseURL: getEnv("APP_BASE_URL", "http://localhost:3000"),
 
 		DatabaseURL: getEnv("DATABASE_URL", "postgres://staffsearch:staffsearch@localhost:5432/staffsearch?sslmode=disable"),
 		RedisURL:    getEnv("REDIS_URL", "redis://localhost:6379/0"),
@@ -44,6 +55,15 @@ func Load() *Config {
 		SMTPUser: getEnv("SMTP_USER", ""),
 		SMTPPass: getEnv("SMTP_PASS", ""),
 		SMTPFrom: getEnv("SMTP_FROM", ""),
+
+		StorageProvider:         getEnv("STORAGE_PROVIDER", "r2"),
+		StorageBucket:           getEnv("STORAGE_BUCKET", ""),
+		StorageRegion:           getEnv("STORAGE_REGION", "auto"),
+		StorageAccessKeyID:      getEnv("STORAGE_ACCESS_KEY_ID", ""),
+		StorageSecretAccessKey:  getEnv("STORAGE_SECRET_ACCESS_KEY", ""),
+		StorageEndpoint:         getEnv("STORAGE_ENDPOINT", ""),
+		StoragePublicURL:        getEnv("STORAGE_PUBLIC_URL", ""),
+		StorageURLExpirySeconds: getEnvInt("STORAGE_URL_EXPIRY_SECONDS", 900),
 	}
 }
 

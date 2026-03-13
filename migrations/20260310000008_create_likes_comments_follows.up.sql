@@ -1,0 +1,28 @@
+CREATE TABLE IF NOT EXISTS likes (
+  id VARCHAR(26) PRIMARY KEY,
+  user_id VARCHAR(26) NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  post_id VARCHAR(26) NOT NULL REFERENCES posts(id) ON DELETE CASCADE,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  UNIQUE(user_id, post_id)
+);
+
+CREATE TABLE IF NOT EXISTS comments (
+  id VARCHAR(26) PRIMARY KEY,
+  post_id VARCHAR(26) NOT NULL REFERENCES posts(id) ON DELETE CASCADE,
+  author_id VARCHAR(26) NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  content TEXT NOT NULL,
+  is_active BOOLEAN NOT NULL DEFAULT TRUE,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_comments_post_id ON comments(post_id);
+
+CREATE TABLE IF NOT EXISTS follows (
+  id VARCHAR(26) PRIMARY KEY,
+  follower_id VARCHAR(26) NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  followed_id VARCHAR(26) NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  UNIQUE(follower_id, followed_id)
+);
+CREATE INDEX IF NOT EXISTS idx_follows_follower_id ON follows(follower_id);
+CREATE INDEX IF NOT EXISTS idx_follows_followed_id ON follows(followed_id);

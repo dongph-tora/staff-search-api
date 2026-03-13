@@ -50,6 +50,7 @@ type UserResponse struct {
 	ID                    string     `json:"id"`
 	Email                 string     `json:"email"`
 	Name                  string     `json:"name"`
+	PhoneNumber           *string    `json:"phone_number"`
 	AvatarURL             *string    `json:"avatar_url"`
 	Role                  string     `json:"role"`
 	IsStaff               bool       `json:"is_staff"`
