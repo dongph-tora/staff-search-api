@@ -3,6 +3,7 @@ package repository
 import (
 	"context"
 	"errors"
+	"time"
 
 	"gorm.io/gorm"
 	"staff-search-api/internal/model"
@@ -47,11 +48,14 @@ func (r *PostRepository) GetFeed(ctx context.Context, cursor string, limit int, 
 	}
 
 	if cursor != "" {
-		query = query.Where("posts.id < ?", cursor)
+		t, err := time.Parse(time.RFC3339Nano, cursor)
+		if err == nil {
+			query = query.Where("posts.created_at < ?", t)
+		}
 	}
 
 	var posts []*model.Post
-	err := query.Order("posts.id DESC").Limit(limit + 1).Find(&posts).Error
+	err := query.Order("posts.created_at DESC, posts.id DESC").Limit(limit + 1).Find(&posts).Error
 	if err != nil {
 		return nil, "", false, err
 	}
@@ -63,7 +67,7 @@ func (r *PostRepository) GetFeed(ctx context.Context, cursor string, limit int, 
 
 	var nextCursor string
 	if len(posts) > 0 {
-		nextCursor = posts[len(posts)-1].ID
+		nextCursor = posts[len(posts)-1].CreatedAt.UTC().Format(time.RFC3339Nano)
 	}
 
 	return posts, nextCursor, hasMore, nil
@@ -75,11 +79,14 @@ func (r *PostRepository) GetByAuthor(ctx context.Context, authorID, cursor strin
 		Where("author_id = ? AND is_active = true", authorID)
 
 	if cursor != "" {
-		query = query.Where("id < ?", cursor)
+		t, err := time.Parse(time.RFC3339Nano, cursor)
+		if err == nil {
+			query = query.Where("created_at < ?", t)
+		}
 	}
 
 	var posts []*model.Post
-	err := query.Order("id DESC").Limit(limit + 1).Find(&posts).Error
+	err := query.Order("created_at DESC, id DESC").Limit(limit + 1).Find(&posts).Error
 	if err != nil {
 		return nil, "", false, err
 	}
@@ -91,7 +98,7 @@ func (r *PostRepository) GetByAuthor(ctx context.Context, authorID, cursor strin
 
 	var nextCursor string
 	if len(posts) > 0 {
-		nextCursor = posts[len(posts)-1].ID
+		nextCursor = posts[len(posts)-1].CreatedAt.UTC().Format(time.RFC3339Nano)
 	}
 
 	return posts, nextCursor, hasMore, nil
